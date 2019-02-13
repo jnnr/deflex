@@ -322,7 +322,7 @@ def storage_nodes(table_collection, nodes):
         bus_label = Label('bus', 'electricity', 'all', region)
         params = storages['phes'][region]
         if 'capex_energy' in params.index:
-            logging.info('Invest in phes')
+            logging.info(f'Invest in phes {region}')
             max_pump = params.max_pump
             max_turbine = params.max_turbine
             max_energy = params.max_energy
