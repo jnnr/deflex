@@ -21,7 +21,6 @@ from matplotlib import pyplot as plt
 # oemof libraries
 import oemof.tools.logger as logger
 import oemof.solph as solph
-from oemof.tools.economics import annuity
 
 # internal modules
 import reegis.scenario_tools
@@ -75,6 +74,7 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
     # Local volatile sources
     vs = table_collection['volatile_source']
     ts = table_collection['time_series']
+
     for region in vs.columns.get_level_values(0).unique():
         for vs_type in vs[region].columns:
             vs_label = Label('source', 'ee', vs_type, region)
@@ -89,28 +89,12 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
             bus_label = Label('bus', 'electricity', 'all', region)
             if bus_label not in nodes:
                 nodes[bus_label] = solph.Bus(label=bus_label)
-            if 'capex' in vs.index and vs.loc['capex', (region, vs_type)] is not None:
-                logging.info(f'Invest in {vs_label}')
-                capex = vs.loc['capex', (region, vs_type)]
-                lifetime = vs.loc['lifetime', (region, vs_type)]
-                wacc = vs.loc['wacc', (region, vs_type)]
-                maximum = vs.loc['maximum', (region, vs_type)]
-                epc = annuity(capex, lifetime, wacc)
+            if capacity * sum(feedin) > 0:
                 nodes[vs_label] = solph.Source(
                     label=vs_label,
                     outputs={nodes[bus_label]: solph.Flow(
-                        actual_value=feedin,
-                        investment=solph.Investment(ep_costs=epc,
-                                                    existing=capacity,
-                                                    maximum=maximum),
+                        actual_value=feedin, nominal_value=capacity,
                         fixed=True, emission=0)})
-            else:
-                if capacity * sum(feedin) > 0:
-                    nodes[vs_label] = solph.Source(
-                        label=vs_label,
-                        outputs={nodes[bus_label]: solph.Flow(
-                            actual_value=feedin, nominal_value=capacity,
-                            fixed=True, emission=0)})
 
     # Decentralised heating systems
     dh = table_collection['decentralised_heating']
@@ -373,43 +357,17 @@ def storage_nodes(table_collection, nodes):
         storage_label = Label('storage', 'electricity', 'phes', region)
         bus_label = Label('bus', 'electricity', 'all', region)
         params = storages['phes'][region]
-        if 'capex_energy' in params.index:
-            logging.info(f'Invest in phes {region}')
-            max_pump = params.max_pump
-            max_turbine = params.max_turbine
-            max_energy = params.max_energy
-            ep_costs_pump = annuity(params.capex_pump, params.lifetime_pump, params.wacc)
-            ep_costs_turbine = annuity(params.capex_turbine, params.lifetime_turbine, params.wacc)
-            ep_costs_energy = annuity(params.capex_energy, params.lifetime_energy, params.wacc)
-            nodes[storage_label] = solph.components.GenericStorage(
-                label=storage_label,
-                inputs={nodes[bus_label]: solph.Flow(
-                    investment=solph.Investment(existing=params.pump,
-                                                maximum=max_pump,
-                                                ep_costs=ep_costs_pump))},
-                outputs={nodes[bus_label]: solph.Flow(
-                    investment=solph.Investment(existing=params.turbine,
-                                                maximum=max_turbine,
-                                                ep_costs=ep_costs_turbine))},
-                capacity_loss=0,
-                initial_capacity=None,
-                inflow_conversion_factor=params.pump_eff,
-                outflow_conversion_factor=params.turbine_eff,
-                investment=solph.Investment(existing=params.energy,
-                                            maximum=max_energy,
-                                            ep_costs=ep_costs_energy))
-        else:
-            nodes[storage_label] = solph.components.GenericStorage(
-                label=storage_label,
-                inputs={nodes[bus_label]: solph.Flow(
-                    nominal_value=params.pump)},
-                outputs={nodes[bus_label]: solph.Flow(
-                    nominal_value=params.turbine)},
-                nominal_capacity=params.energy,
-                capacity_loss=0,
-                initial_capacity=None,
-                inflow_conversion_factor=params.pump_eff,
-                outflow_conversion_factor=params.turbine_eff)
+        nodes[storage_label] = solph.components.GenericStorage(
+            label=storage_label,
+            inputs={nodes[bus_label]: solph.Flow(
+                nominal_value=params.pump)},
+            outputs={nodes[bus_label]: solph.Flow(
+                nominal_value=params.turbine)},
+            nominal_capacity=params.energy,
+            capacity_loss=0,
+            initial_capacity=None,
+            inflow_conversion_factor=params.pump_eff,
+            outflow_conversion_factor=params.turbine_eff)
     return nodes
 
 
