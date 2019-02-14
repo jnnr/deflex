@@ -227,7 +227,7 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
             params = trsf[region, fuel]
 
             # Create power plants as 1x1 Transformer
-            if invest:
+            if params.capacity > 0:
                 # Define output flow with or without summed_max attribute
                 if params.limit_elec_pp == float('inf'):
                     outflow = solph.Flow(nominal_value=params.capacity)
@@ -243,70 +243,31 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
                     inputs={nodes[bus_fuel]: solph.Flow()},
                     outputs={nodes[bus_elec]: outflow},
                     conversion_factors={nodes[bus_elec]: params.efficiency})
-            else:
-                if params.capacity > 0:
-                    # Define output flow with or without summed_max attribute
-                    if params.limit_elec_pp == float('inf'):
-                        outflow = solph.Flow(nominal_value=params.capacity)
-                    else:
-                        smax = params.limit_elec_pp / params.capacity
-                        outflow = solph.Flow(nominal_value=params.capacity,
-                                             summed_max=smax)
-
-                    trsf_label = Label(
-                        'trsf', 'pp', fuel.replace(' ', '_'), region)
-                    nodes[trsf_label] = solph.Transformer(
-                        label=trsf_label,
-                        inputs={nodes[bus_fuel]: solph.Flow()},
-                        outputs={nodes[bus_elec]: outflow},
-                        conversion_factors={nodes[bus_elec]: params.efficiency})
 
             # Create chp plants as 1x2 Transformer
-            if invest:
-                if params.capacity_heat_chp > 0:
-                    trsf_label = Label(
-                        'trsf', 'chp', fuel.replace(' ', '_'), region)
+            if params.capacity_heat_chp > 0:
+                trsf_label = Label(
+                    'trsf', 'chp', fuel.replace(' ', '_'), region)
 
-                    smax = (
-                            (params.limit_heat_chp / params.efficiency_heat_chp) /
-                            (params.capacity_heat_chp / params.efficiency_heat_chp))
+                smax = (
+                    (params.limit_heat_chp / params.efficiency_heat_chp) /
+                    (params.capacity_heat_chp / params.efficiency_heat_chp))
 
-                    nodes[trsf_label] = solph.Transformer(
-                        label=trsf_label,
-                        inputs={nodes[bus_fuel]: solph.Flow(
+                nodes[trsf_label] = solph.Transformer(
+                    label=trsf_label,
+                    inputs={nodes[bus_fuel]: solph.Flow(
                             nominal_value=(params.capacity_heat_chp /
                                            params.efficiency_heat_chp),
                             summed_max=smax)},
-                        outputs={
-                            nodes[bus_elec]: solph.Flow(),
-                            nodes[bus_heat]: solph.Flow()},
-                        conversion_factors={
-                            nodes[bus_elec]: params.efficiency_elec_chp,
-                            nodes[bus_heat]: params.efficiency_heat_chp})
-            else:
-                if params.capacity_heat_chp > 0:
-                    trsf_label = Label(
-                        'trsf', 'chp', fuel.replace(' ', '_'), region)
-
-                    smax = (
-                        (params.limit_heat_chp / params.efficiency_heat_chp) /
-                        (params.capacity_heat_chp / params.efficiency_heat_chp))
-
-                    nodes[trsf_label] = solph.Transformer(
-                        label=trsf_label,
-                        inputs={nodes[bus_fuel]: solph.Flow(
-                                nominal_value=(params.capacity_heat_chp /
-                                               params.efficiency_heat_chp),
-                                summed_max=smax)},
-                        outputs={
-                            nodes[bus_elec]: solph.Flow(),
-                            nodes[bus_heat]: solph.Flow()},
-                        conversion_factors={
-                            nodes[bus_elec]: params.efficiency_elec_chp,
-                            nodes[bus_heat]: params.efficiency_heat_chp})
+                    outputs={
+                        nodes[bus_elec]: solph.Flow(),
+                        nodes[bus_heat]: solph.Flow()},
+                    conversion_factors={
+                        nodes[bus_elec]: params.efficiency_elec_chp,
+                        nodes[bus_heat]: params.efficiency_heat_chp})
 
             # Create heat plants as 1x1 Transformer
-            if invest:
+            if params.capacity_hp > 0:
                 trsf_label = Label(
                     'trsf', 'hp', fuel.replace(' ', '_'), region)
                 smax = params.limit_hp/params.capacity_hp
@@ -318,19 +279,6 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
                         nominal_value=params.capacity_hp,
                         summed_max=smax)},
                     conversion_factors={nodes[bus_heat]: params.efficiency_hp})
-            else:
-                if params.capacity_hp > 0:
-                    trsf_label = Label(
-                        'trsf', 'hp', fuel.replace(' ', '_'), region)
-                    smax = params.limit_hp/params.capacity_hp
-
-                    nodes[trsf_label] = solph.Transformer(
-                        label=trsf_label,
-                        inputs={nodes[bus_fuel]: solph.Flow()},
-                        outputs={nodes[bus_heat]: solph.Flow(
-                            nominal_value=params.capacity_hp,
-                            summed_max=smax)},
-                        conversion_factors={nodes[bus_heat]: params.efficiency_hp})
 
     # Storages
     if 'storages' in table_collection:
