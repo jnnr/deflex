@@ -23,6 +23,7 @@ from oemof.tools import logger
 # internal modules
 import reegis.config as cfg
 import deflex
+from deflex.postprocess_results_for_ose import postprocess
 
 
 def stopwatch():
@@ -82,6 +83,9 @@ def main(year, plot_graph=False):
 
     logging.info("All done. deflex finished without errors: {0}".format(
         stopwatch()))
+
+    logging.info("Postprocess results")
+    postprocess()
 
 
 if __name__ == "__main__":
