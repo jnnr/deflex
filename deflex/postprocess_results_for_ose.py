@@ -272,7 +272,6 @@ def get_market_clearing_price(es, with_chp=False):
 
 def get_average_yearly_price(es):
     """
-    TODO: Is this clearing price?
     (Wholesale) prices
         (Quantity-weighted?) average yearly price	€/MWh	absolute difference or % change
     """
@@ -430,13 +429,9 @@ def postprocess():
     startups = get_start_ups(es)
     emissions = get_emissions(es)
     var_costs = get_var_costs(es)
+    average_yearly_price = get_average_yearly_price(es)
     installed_capacity = get_installed_capacity(es)
     cap_costs = get_cap_costs(es)
-    # cap_costs.to_csv('postproc_results/cap_costs.csv')
-    # print('\n ### cap_costs \n', cap_costs)
-    average_yearly_price = get_average_yearly_price(es)
-    # average_yearly_price.to_csv('postproc_results/average_yearly_price.csv')
-
     # lcoe = get_lcoe(es)
 
     # param = fetch_cost_emission(es)
@@ -455,7 +450,9 @@ def postprocess():
     startups.to_csv(results_path + 'startups.csv')
     emissions.to_csv(results_path + 'emissions.csv')
     var_costs.to_csv(results_path + 'var_costs.csv')
+    pd.Series(average_yearly_price).to_csv(results_path + 'average_yearly_price.csv')
     installed_capacity.to_csv(results_path + 'installed_capacity.csv')
+    # cap_costs.to_csv('postproc_results/cap_costs.csv')
 
     # print
     print('\n ### demand \n', demand)
@@ -464,9 +461,11 @@ def postprocess():
     print('\n ### startups \n', startups)
     print('\n ### emissions \n', emissions)
     print('\n ### variable_cost \n', var_costs)
+    print('\n ### average yearly price \n', average_yearly_price)
     print('\n ### installed_capacity \n', installed_capacity)
     print(installed_capacity.drop([('electricity', 'line'), ('electricity', 'storage')]).sum(level=0))
     print('\n ### average_yearly_price [Eur/MWh] \n', average_yearly_price)
+    # print('\n ### cap_costs \n', cap_costs)
 
 if __name__=='__main__':
     postprocess()
