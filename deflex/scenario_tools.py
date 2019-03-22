@@ -303,19 +303,36 @@ def storage_nodes(table_collection, nodes):
     storages.columns = storages.columns.swaplevel()
     for region in storages['phes'].columns:
         storage_label = Label('storage', 'electricity', 'phes', region)
+        print(storage_label)
         bus_label = Label('bus', 'electricity', 'all', region)
         params = storages['phes'][region]
         nodes[storage_label] = solph.components.GenericStorage(
             label=storage_label,
             inputs={nodes[bus_label]: solph.Flow(
-                nominal_value=params.pump)},
+                nominal_value=params.charging_power)},
             outputs={nodes[bus_label]: solph.Flow(
-                nominal_value=params.turbine)},
+                nominal_value=params.discharging_power)},
             nominal_capacity=params.energy,
             capacity_loss=0,
             initial_capacity=None,
-            inflow_conversion_factor=params.pump_eff,
-            outflow_conversion_factor=params.turbine_eff)
+            inflow_conversion_factor=params.charging_eff,
+            outflow_conversion_factor=params.discharging_eff)
+    for region in storages['li_ion'].columns:
+        storage_label = Label('storage', 'electricity', 'li_ion', region)
+        print(storage_label)
+        bus_label = Label('bus', 'electricity', 'all', region)
+        params = storages['li_ion'][region]
+        nodes[storage_label] = solph.components.GenericStorage(
+            label=storage_label,
+            inputs={nodes[bus_label]: solph.Flow(
+                nominal_value=params.charging_power)},
+            outputs={nodes[bus_label]: solph.Flow(
+                nominal_value=params.discharging_power)},
+            nominal_capacity=params.energy,
+            capacity_loss=0,
+            initial_capacity=None,
+            inflow_conversion_factor=params.charging_eff,
+            outflow_conversion_factor=params.discharging_eff)
     return nodes
 
 
