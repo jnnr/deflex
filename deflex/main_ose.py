@@ -16,6 +16,7 @@ import logging
 from datetime import datetime
 import time
 import traceback
+import re
 
 # oemof packages
 from oemof.tools import logger
@@ -32,9 +33,9 @@ def stopwatch():
     return str(datetime.now() - stopwatch.start)[:-7]
 
 
-def main(year, plot_graph=False):
+def main(year, tag, plot_graph=False):
     stopwatch()
-    name = '{0}_{1}_{2}'.format('deflex', year, cfg.get('init', 'map'))
+    name = '{0}_{1}_{2}_{3}'.format('deflex', year, cfg.get('init', 'map'), tags)
     meta = {'year': year,
             'model_base': 'deflex',
             'map': cfg.get('init', 'map'),
@@ -44,7 +45,6 @@ def main(year, plot_graph=False):
     path = os.path.join(cfg.get('paths', 'scenario'), 'deflex', str(year))
     csv_dir = name + '_csv'
     csv_path = os.path.join(path, csv_dir)
-
     if not os.path.isdir(csv_path):
         fn = deflex.basic_scenario.create_basic_scenario(year, path=path,
                                                          csv_dir=csv_dir)
@@ -85,18 +85,25 @@ def main(year, plot_graph=False):
         stopwatch()))
 
     logging.info("Postprocess results")
-    postprocess()
+    results_path = os.path.join(path, f'postproc_results_{name}')
+    postprocess(es_filename=out_file, results_path=results_path)
 
 
 if __name__ == "__main__":
     logger.define_logging()
     for y in [2012]:
-        for my_rmap in ['de02']:
-            cfg.tmp_set('init', 'map', my_rmap)
-            try:
-                main(y)
-            except Exception as e:
-                logging.error(traceback.format_exc())
-                time.sleep(0.5)
-                logging.error(e)
-                time.sleep(0.5)
+        for tags in ['full_100',
+                     'full_50',
+                     'full_25',
+                     'electricity-only_100',
+                     'electricity-only_50',
+                     'electricity-only_25']:
+            for my_rmap in ['de02']:
+                cfg.tmp_set('init', 'map', my_rmap)
+                try:
+                    main(y, tags)
+                except Exception as e:
+                    logging.error(traceback.format_exc())
+                    time.sleep(0.5)
+                    logging.error(e)
+                    time.sleep(0.5)
