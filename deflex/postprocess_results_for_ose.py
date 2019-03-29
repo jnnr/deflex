@@ -117,7 +117,7 @@ def get_cap_costs(es):
     inv_cost = inv_cost.drop(('electricity','ee','wind'))
     cap_costs = inv_cost.append(installed_capacity, 0)
     cap_costs['capex'] = cap_costs['investment_cost'].multiply(cap_costs['nominal_value'])
-    print(cap_costs)
+    # print(cap_costs)
     return None
 
 
@@ -125,11 +125,11 @@ def get_lcoe(es):
     """
     TODO
     Cost
-        Total system cost	€	% change
-        Average total system cost (LCOE)	€/MWh	% change
-        Capacity cost	€	% change
-        Variable cost	€	% change
-        Network cost	€	% change
+        Total system cost	eur	% change
+        Average total system cost (LCOE)	eur/MWh	% change
+        Capacity cost	eur	% change
+        Variable cost	eur	% change
+        Network cost	eur	% change
     """
     cap_cost_el = get_cap_costs(es) # This has to be split among heat and el
     cap_cost_el = get_var_costs(es) # This has to be split among heat and el
@@ -263,7 +263,7 @@ def get_market_clearing_price(es, with_chp=False):
 def get_average_yearly_price(es):
     """
     (Wholesale) prices
-        (Quantity-weighted?) average yearly price	€/MWh	absolute difference or % change
+        (Quantity-weighted?) average yearly price	eur/MWh	absolute difference or % change
     """
     market_clearing_price = get_market_clearing_price(es)
     average_yearly_price = market_clearing_price.mean()
@@ -366,7 +366,7 @@ def get_start_ups(es):
     """
     Start-ups
         Yearly number of start-ups by technology	without unit	absolute difference or % change
-    	Yearly start-up costs by technology	€	% change
+    	Yearly start-up costs by technology	eur	% change
     """
     generation_df = get_generation(es)
     nonzero = generation_df.apply(lambda x: x != 0)
