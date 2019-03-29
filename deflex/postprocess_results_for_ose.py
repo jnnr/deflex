@@ -3,21 +3,6 @@ import pandas as pd
 from deflex import Scenario
 import re
 
-# abspath = os.path.dirname(os.path.abspath(__file__))
-# dpath = os.path.join(abspath, 'results_from_srv')
-# filename = 'deflex_2012_de21.esys'
-
-dpath = '/home/jann/reegis/scenarios/deflex/2012/results_cbc/'
-filename = 'deflex_2012_de02.esys' # 'deflex_2012_de21.esys'
-print(dpath)
-print(filename)
-
-
-sc = Scenario()
-sc.restore_es(filename=dpath + filename)
-es = sc.es
-results = sc.es.results
-
 def get_var_costs(es):
     """
     Carbon emissions
@@ -120,14 +105,19 @@ def get_installed_capacity(es):
     installed_capacity = pd.Series(installed_capacity)
     installed_capacity = installed_capacity.sort_index()
     installed_capacity = installed_capacity.sum(level=[0,1,2,4])
+    installed_capacity.name = 'installed_capacity'
     return installed_capacity
 
 def get_cap_costs(es):
     """
     Get capital cost for existing and invested capacity.
     """
-    installed_capacity = get_installed_capacity(es)
-
+    installed_capacity = get_installed_capacity(es).unstack()
+    inv_cost = pd.read_csv('/home/jann/reegis/scenarios/deflex/2012/investment_costs.csv', header=0, index_col=[0,1,2])
+    inv_cost = inv_cost.drop(('electricity','ee','wind'))
+    cap_costs = inv_cost.append(installed_capacity, 0)
+    cap_costs['capex'] = cap_costs['investment_cost'].multiply(cap_costs['nominal_value'])
+    print(cap_costs)
     return None
 
 
@@ -422,7 +412,12 @@ def get_demand(es):
     demand = pd.concat([demand_sum, demand_max], axis=1, keys=['sum [MWh]', 'max [MW]'])
     return demand
 
-def postprocess():
+
+def postprocess(es_filename, results_path):
+    sc = Scenario()
+    sc.restore_es(filename=es_filename)
+    es = sc.es
+
     demand = get_demand(es)
     yearly_generation = get_yearly_generation(es)
     shortage = get_shortage(yearly_generation)
@@ -439,33 +434,35 @@ def postprocess():
     # print(param.mean(level=0))
 
     # save
-    results_path = f'/home/jann/reegis/scenarios/deflex/2012/' \
-                   f'postproc_results_{re.split("_|.esys", filename)[2]}/'
     if not os.path.exists(results_path):
         os.makedirs(results_path)
     print(results_path)
-    demand.to_csv(results_path + 'demand.csv')
-    yearly_generation.to_csv(results_path + 'yearly_generation.csv')
-    shortage.to_csv(results_path + 'shortage.csv')
-    startups.to_csv(results_path + 'startups.csv')
-    emissions.to_csv(results_path + 'emissions.csv')
-    var_costs.to_csv(results_path + 'var_costs.csv')
-    pd.Series(average_yearly_price).to_csv(results_path + 'average_yearly_price.csv')
-    installed_capacity.to_csv(results_path + 'installed_capacity.csv')
+    demand.to_csv(results_path + '/' + 'demand.csv')
+    yearly_generation.to_csv(results_path + '/' + 'yearly_generation.csv')
+    shortage.to_csv(results_path + '/' + 'shortage.csv')
+    startups.to_csv(results_path + '/' + 'startups.csv')
+    emissions.to_csv(results_path + '/' + 'emissions.csv')
+    var_costs.to_csv(results_path + '/' + 'var_costs.csv')
+    pd.Series(average_yearly_price).to_csv(results_path + '/' + 'average_yearly_price.csv')
+    installed_capacity.to_csv(results_path + '/' + 'installed_capacity.csv')
     # cap_costs.to_csv('postproc_results/cap_costs.csv')
 
     # print
-    print('\n ### demand \n', demand)
-    print('\n ### yearly generation \n', yearly_generation)
-    print('\n ### shortage \n', shortage)
-    print('\n ### startups \n', startups)
-    print('\n ### emissions \n', emissions)
-    print('\n ### variable_cost \n', var_costs)
-    print('\n ### average yearly price \n', average_yearly_price)
-    print('\n ### installed_capacity \n', installed_capacity)
-    print(installed_capacity.drop([('electricity', 'line'), ('electricity', 'storage')]).sum(level=0))
-    print('\n ### average_yearly_price [Eur/MWh] \n', average_yearly_price)
+    # print('\n ### demand \n', demand)
+    # print('\n ### yearly generation \n', yearly_generation)
+    # print('\n ### shortage \n', shortage)
+    # print('\n ### startups \n', startups)
+    # print('\n ### emissions \n', emissions)
+    # print('\n ### variable_cost \n', var_costs)
+    # print('\n ### average yearly price \n', average_yearly_price)
+    # print('\n ### installed_capacity \n', installed_capacity)
+    # print(installed_capacity.drop([('electricity', 'line'), ('electricity', 'storage')]).sum(level=0))
+    # print('\n ### average_yearly_price [Eur/MWh] \n', average_yearly_price)
     # print('\n ### cap_costs \n', cap_costs)
 
 if __name__=='__main__':
-    postprocess()
+    dpath = '/home/jann/reegis/scenarios/deflex/2012/results_cbc/'
+    filename = 'deflex_2012_de02.esys'  # 'deflex_2012_de21.esys'
+    es_filename = dpath + filename
+    results_path = f'/home/jann/reegis/scenarios/deflex/2012/postproc_results_{re.split(".esys", filename)[0]}/'
+    postprocess(es_filename, results_path)
