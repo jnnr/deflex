@@ -413,6 +413,44 @@ def get_demand(es):
     return demand
 
 
+def get_formatted_results():
+    r"""
+    Gives back results in the standard output format as agreed upon with all
+    model experiment participants.
+
+    Returns
+    -------
+
+    output : pandas.DataFrame
+    """
+    abs_path = os.path.dirname(os.path.abspath(__file__))
+    formatted_results = pd.read_csv(os.path.join(abs_path, 'ose_output_template_deflex.csv'))
+    formatted_results['Model'] = 'deflex'
+    formatted_results['Scenario'] = 'deflex'
+
+    # Costs
+    formatted_results.loc[formatted_results['Variable'] == 'Costs|Total system', 'Value'] = 0
+
+    # Capacities
+    formatted_results.loc[formatted_results['Variable'] == 'Capacity|Electricity|Nuclear', 'Value'] = 0
+
+    # Energy
+    formatted_results.loc[formatted_results['Variable'] == 'Energy|Electricity|Nuclear', 'Value'] = 0
+
+    # Cycles
+    formatted_results.loc[formatted_results['Variable'] == 'Cycles|Electricity|Storage|Liion', 'Value'] = 0
+
+    # Prices
+    formatted_results.loc[formatted_results['Variable'] == 'Price|Electricity|Weighted average', 'Value'] = 0
+
+    # Startups
+    formatted_results.loc[formatted_results['Variable'] == 'Startups|Electricity|Total number', 'Value'] = 0
+
+    # Demands
+    formatted_results.loc[formatted_results['Variable'] == 'Energy|Electricity|Peak demand', 'Value'] = 0
+    return formatted_results
+
+
 def postprocess(es_filename, results_path):
     sc = Scenario()
     sc.restore_es(filename=es_filename)
@@ -428,6 +466,8 @@ def postprocess(es_filename, results_path):
     installed_capacity = get_installed_capacity(es)
     cap_costs = get_cap_costs(es)
     # lcoe = get_lcoe(es)
+    formatted_results = get_formatted_results()
+    print(formatted_results[['Variable', 'Unit', 'Value']])
 
     # param = fetch_cost_emission(es)
     # print(param)
@@ -446,8 +486,8 @@ def postprocess(es_filename, results_path):
     pd.Series(average_yearly_price).to_csv(results_path + '/' + 'average_yearly_price.csv')
     installed_capacity.to_csv(results_path + '/' + 'installed_capacity.csv')
     # cap_costs.to_csv('postproc_results/cap_costs.csv')
+    formatted_results.to_csv(results_path + '/' + 'formatted_results.csv')
 
-    # print
     # print('\n ### demand \n', demand)
     # print('\n ### yearly generation \n', yearly_generation)
     # print('\n ### shortage \n', shortage)
