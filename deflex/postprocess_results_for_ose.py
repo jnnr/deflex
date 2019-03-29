@@ -464,14 +464,10 @@ def postprocess(es_filename, results_path):
                                               demand)
     print(formatted_results[['Variable', 'Unit', 'Value']])
 
-    # param = fetch_cost_emission(es)
-    # print(param)
-    # print(param.mean(level=0))
-
     # save
     if not os.path.exists(results_path):
         os.makedirs(results_path)
-    print(results_path)
+    print('Results saved to ', results_path)
 
     demand.to_csv(results_path + '/' + 'demand.csv')
     yearly_generation.to_csv(results_path + '/' + 'yearly_generation.csv')
@@ -486,17 +482,6 @@ def postprocess(es_filename, results_path):
     cycles.to_csv(results_path + '/' + 'cycles.csv')
     formatted_results.to_csv(results_path + '/' + 'formatted_results.csv')
 
-    # print('\n ### demand \n', demand)
-    # print('\n ### yearly generation \n', yearly_generation)
-    # print('\n ### shortage \n', shortage)
-    # print('\n ### startups \n', startups)
-    # print('\n ### emissions \n', emissions)
-    # print('\n ### variable_cost \n', var_costs)
-    # print('\n ### average yearly price \n', average_yearly_price)
-    # print('\n ### installed_capacity \n', installed_capacity)
-    # print(installed_capacity.drop([('electricity', 'line'), ('electricity', 'storage')]).sum(level=0))
-    # print('\n ### average_yearly_price [Eur/MWh] \n', average_yearly_price)
-    # print('\n ### cap_costs \n', cap_costs)
 
 if __name__=='__main__':
     dpath = '/home/jann/reegis/scenarios/deflex/2012/results_cbc/'
