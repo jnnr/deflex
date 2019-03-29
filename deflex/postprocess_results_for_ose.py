@@ -430,9 +430,11 @@ def get_formatted_results(costs, installed_capacity, yearly_generation, cycles, 
     mapping = pd.read_csv(os.path.join(abs_path, 'mapping_results_to_output_template.csv'))
     for index, row in mapping.iterrows():
         to_variable = row['to_variable']
-        from_table = row['from_table']
-        key = row[['key_0', 'key_1', 'key_2', 'key_3']]
-        print(locals()[from_table])
+        from_table = locals()[row['from_table']]
+        key = tuple(row[['key_0', 'key_1', 'key_2', 'key_3']].dropna())
+        if key:
+             print(key)
+             print(from_table[key])
         formatted_results.loc[formatted_results['Variable'] == to_variable, 'Value'] = 1
     return formatted_results
 
@@ -462,7 +464,7 @@ def postprocess(es_filename, results_path):
                                               average_yearly_price,
                                               startups,
                                               demand)
-    print(formatted_results[['Variable', 'Unit', 'Value']])
+    # print(formatted_results[['Variable', 'Unit', 'Value']])
 
     # save
     if not os.path.exists(results_path):
