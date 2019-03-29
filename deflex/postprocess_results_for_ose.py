@@ -413,41 +413,27 @@ def get_demand(es):
     return demand
 
 
-def get_formatted_results():
+def get_formatted_results(costs, installed_capacity, yearly_generation, cycles, emissions, average_yearly_price, startups, demand):
     r"""
     Gives back results in the standard output format as agreed upon with all
     model experiment participants.
 
     Returns
     -------
-
-    output : pandas.DataFrame
+    formatted_results : pandas.DataFrame
     """
     abs_path = os.path.dirname(os.path.abspath(__file__))
     formatted_results = pd.read_csv(os.path.join(abs_path, 'ose_output_template_deflex.csv'))
     formatted_results['Model'] = 'deflex'
     formatted_results['Scenario'] = 'deflex'
 
-    # Costs
-    formatted_results.loc[formatted_results['Variable'] == 'Costs|Total system', 'Value'] = 0
-
-    # Capacities
-    formatted_results.loc[formatted_results['Variable'] == 'Capacity|Electricity|Nuclear', 'Value'] = 0
-
-    # Energy
-    formatted_results.loc[formatted_results['Variable'] == 'Energy|Electricity|Nuclear', 'Value'] = 0
-
-    # Cycles
-    formatted_results.loc[formatted_results['Variable'] == 'Cycles|Electricity|Storage|Liion', 'Value'] = 0
-
-    # Prices
-    formatted_results.loc[formatted_results['Variable'] == 'Price|Electricity|Weighted average', 'Value'] = 0
-
-    # Startups
-    formatted_results.loc[formatted_results['Variable'] == 'Startups|Electricity|Total number', 'Value'] = 0
-
-    # Demands
-    formatted_results.loc[formatted_results['Variable'] == 'Energy|Electricity|Peak demand', 'Value'] = 0
+    mapping = pd.read_csv(os.path.join(abs_path, 'mapping_results_to_output_template.csv'))
+    for index, row in mapping.iterrows():
+        to_variable = row['to_variable']
+        from_table = row['from_table']
+        key = row[['key_0', 'key_1', 'key_2', 'key_3']]
+        print(locals()[from_table])
+        formatted_results.loc[formatted_results['Variable'] == to_variable, 'Value'] = 1
     return formatted_results
 
 
@@ -466,7 +452,16 @@ def postprocess(es_filename, results_path):
     installed_capacity = get_installed_capacity(es)
     cap_costs = get_cap_costs(es)
     # lcoe = get_lcoe(es)
-    formatted_results = get_formatted_results()
+    costs = pd.DataFrame()
+    cycles = pd.DataFrame()
+    formatted_results = get_formatted_results(costs,
+                                              installed_capacity,
+                                              yearly_generation,
+                                              cycles,
+                                              emissions,
+                                              average_yearly_price,
+                                              startups,
+                                              demand)
     print(formatted_results[['Variable', 'Unit', 'Value']])
 
     # param = fetch_cost_emission(es)
@@ -477,6 +472,7 @@ def postprocess(es_filename, results_path):
     if not os.path.exists(results_path):
         os.makedirs(results_path)
     print(results_path)
+
     demand.to_csv(results_path + '/' + 'demand.csv')
     yearly_generation.to_csv(results_path + '/' + 'yearly_generation.csv')
     shortage.to_csv(results_path + '/' + 'shortage.csv')
@@ -486,6 +482,8 @@ def postprocess(es_filename, results_path):
     pd.Series(average_yearly_price).to_csv(results_path + '/' + 'average_yearly_price.csv')
     installed_capacity.to_csv(results_path + '/' + 'installed_capacity.csv')
     # cap_costs.to_csv('postproc_results/cap_costs.csv')
+    costs.to_csv(results_path + '/' + 'costs.csv')
+    cycles.to_csv(results_path + '/' + 'cycles.csv')
     formatted_results.to_csv(results_path + '/' + 'formatted_results.csv')
 
     # print('\n ### demand \n', demand)
