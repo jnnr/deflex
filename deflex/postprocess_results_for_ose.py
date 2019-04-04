@@ -108,6 +108,10 @@ def get_installed_capacity(es):
 
     installed_capacity.index = installed_capacity.index.set_names(['sector', 'technology', 'carrier', 'variable'])
     installed_capacity.name = 'installed_capacity'
+    sum_tech = installed_capacity.groupby(['sector', 'carrier', 'variable']).sum()
+    sum_tech = pd.concat([sum_tech], keys=['all'], names=['technology'])
+    sum_tech = sum_tech.reorder_levels(['sector', 'technology', 'carrier', 'variable'])
+    installed_capacity = installed_capacity.append(sum_tech)
     return installed_capacity
 
 def get_cap_costs(es):
@@ -330,6 +334,10 @@ def get_yearly_generation(es):
     generation_df['heat','total','total'] = generation_df['heat'].drop('shortage').sum()
     generation_df.name = 'yearly_generation'
     generation_df.index = generation_df.index.set_names(['sector', 'technology', 'carrier'])
+    sum_tech = generation_df.groupby(['sector', 'carrier']).sum()
+    sum_tech = pd.concat([sum_tech], keys=['all'], names=['technology'])
+    sum_tech = sum_tech.reorder_levels(['sector', 'technology', 'carrier'])
+    generation_df = generation_df.append(sum_tech)
     return generation_df
 
 
