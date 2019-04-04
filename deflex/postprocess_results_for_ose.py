@@ -433,8 +433,8 @@ def get_formatted_results(costs, installed_capacity, yearly_generation, cycles, 
         from_table = locals()[row['from_table']]
         key = tuple(row[['key_0', 'key_1', 'key_2', 'key_3']].dropna())
         if key:
-             print(key)
-             print(from_table[key])
+            print(key)
+            print(from_table[key])
         formatted_results.loc[formatted_results['Variable'] == to_variable, 'Value'] = 1
     return formatted_results
 
