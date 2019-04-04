@@ -447,7 +447,7 @@ def get_formatted_results(costs, installed_capacity, yearly_generation, cycles, 
         if key:
             print(key)
             print(from_table[key])
-        formatted_results.loc[formatted_results['Variable'] == to_variable, 'Value'] = 1
+            formatted_results.loc[formatted_results['Variable'] == to_variable, 'Value'] = from_table[key]
     return formatted_results
 
 
