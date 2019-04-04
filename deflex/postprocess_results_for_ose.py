@@ -308,8 +308,11 @@ def get_generation(es):
             if i[0].label.cat == 'shortage':
                 generation_dict['electricity', i[0].label.cat, 'None', i[1].label.region] = \
                     r[i]['sequences']['flow']
-            elif (i[0].label.cat == 'line') or (i[0].label.cat == 'storage'):
-                # lines and storages
+            elif (i[0].label.cat == 'storage'):
+                generation_dict['electricity', i[0].label.cat, 'None', i[1].label.region] = \
+                    r[i]['sequences']['flow']
+            elif (i[0].label.cat == 'line'):
+                # lines
                 pass
             else:
                 generation_dict['electricity', i[0].label.tag, i[0].label.subtag, i[1].label.region] = \
@@ -317,7 +320,6 @@ def get_generation(es):
         else:
             # commodity busses
             pass
-
     generation_df = pd.DataFrame(generation_dict)
     return generation_df
 
