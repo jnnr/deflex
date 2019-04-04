@@ -469,7 +469,6 @@ def postprocess(es_filename, results_path):
     # save
     if not os.path.exists(results_path):
         os.makedirs(results_path)
-    print('Results saved to ', results_path)
 
     demand.to_csv(results_path + '/' + 'demand.csv')
     yearly_generation.to_csv(results_path + '/' + 'yearly_generation.csv')
@@ -484,6 +483,7 @@ def postprocess(es_filename, results_path):
     cycles.to_csv(results_path + '/' + 'cycles.csv')
     formatted_results.to_csv(results_path + '/' + 'formatted_results.csv')
 
+    print('Results saved to ', results_path)
 
 if __name__=='__main__':
     dpath = '/home/jann/reegis/scenarios/deflex/2012/results_cbc/'
