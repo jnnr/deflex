@@ -105,6 +105,8 @@ def get_installed_capacity(es):
     installed_capacity = pd.Series(installed_capacity)
     installed_capacity = installed_capacity.sort_index()
     installed_capacity = installed_capacity.sum(level=[0,1,2,4])
+
+    installed_capacity.index = installed_capacity.index.set_names(['sector', 'technology', 'carrier', 'variable'])
     installed_capacity.name = 'installed_capacity'
     return installed_capacity
 
@@ -326,6 +328,8 @@ def get_yearly_generation(es):
     # total
     generation_df['electricity','total','total'] = generation_df['electricity'].drop('shortage').sum()
     generation_df['heat','total','total'] = generation_df['heat'].drop('shortage').sum()
+    generation_df.name = 'yearly_generation'
+    generation_df.index = generation_df.index.set_names(['sector', 'technology', 'carrier'])
     return generation_df
 
 
@@ -471,13 +475,13 @@ def postprocess(es_filename, results_path):
         os.makedirs(results_path)
 
     demand.to_csv(results_path + '/' + 'demand.csv')
-    yearly_generation.to_csv(results_path + '/' + 'yearly_generation.csv')
+    yearly_generation.to_csv(results_path + '/' + 'yearly_generation.csv', header=True)
     shortage.to_csv(results_path + '/' + 'shortage.csv')
     startups.to_csv(results_path + '/' + 'startups.csv')
     emissions.to_csv(results_path + '/' + 'emissions.csv')
     var_costs.to_csv(results_path + '/' + 'var_costs.csv')
     pd.Series(average_yearly_price).to_csv(results_path + '/' + 'average_yearly_price.csv')
-    installed_capacity.to_csv(results_path + '/' + 'installed_capacity.csv')
+    installed_capacity.to_csv(results_path + '/' + 'installed_capacity.csv', header=True)
     # cap_costs.to_csv('postproc_results/cap_costs.csv')
     costs.to_csv(results_path + '/' + 'costs.csv')
     cycles.to_csv(results_path + '/' + 'cycles.csv')
