@@ -23,9 +23,10 @@ def get_var_costs(es):
 
     var_cost_df['summed_variable_costs [Eur]'] = (var_cost_df['var_cost [Eur/MWh]'] *
                                             var_cost_df['summed_flow [MWh]'])
-
+    var_cost_df.loc['total'] = [None, None, var_cost_df['summed_variable_costs [Eur]'].sum()]
+    var_cost_df
     var_cost_df.sort_index(inplace=True)
-    return var_cost_df
+    return var_cost_df['summed_variable_costs [Eur]']
 
 
 def get_installed_capacity(es):
@@ -281,7 +282,7 @@ def get_average_yearly_price(es):
         (Quantity-weighted?) average yearly price	eur/MWh	absolute difference or % change
     """
     market_clearing_price = get_market_clearing_price(es)
-    average_yearly_price = market_clearing_price.mean()
+    average_yearly_price = pd.Series(market_clearing_price.mean(), index=['avg_price'])
     return average_yearly_price
 
 
@@ -382,11 +383,12 @@ def get_emissions(es):
             emission_df.loc[i[0].label.subtag, 'summed_flow [MWh]'] = (
                 r[i]['sequences']['flow'].sum())
 
-    emission_df['total_emission [kgCO2]'] = (emission_df['specific_emission [kgCO2/MWh]'] *
+    emission_df['summed_emission [kgCO2]'] = (emission_df['specific_emission [kgCO2/MWh]'] *
                                      emission_df['summed_flow [MWh]'])
 
+    emission_df.loc['total'] = [None, None, emission_df['summed_emission [kgCO2]'].sum()]
     emission_df.sort_index(inplace=True)
-    return emission_df
+    return emission_df['summed_emission [kgCO2]']
 
 
 def get_start_ups(es):
@@ -440,6 +442,26 @@ def get_demand(es):
     demand = pd.concat([demand_sum, demand_max], axis=0).reorder_levels([1,2,0])
     return demand
 
+def get_storage_charge_discharge(es):
+    results = es.results['Main']
+    flow_charge = (i for i in results.keys()
+                   if i[1] is not None
+                   and i[1].label.cat == 'storage')
+    flow_discharge = (i for i in results.keys()
+                      if i[1] is not None
+                      and i[0].label.cat == 'storage')
+    charge_discharge_dict = {}
+    for i in flow_charge:
+        charge_discharge_dict[i[1].label.tag, 'storage_charge', i[1].label.subtag, i[1].label.region] = results[i]['sequences']['flow']
+    for i in flow_discharge:
+        charge_discharge_dict[i[0].label.tag, 'storage_discharge', i[0].label.subtag, i[0].label.region] = results[i]['sequences']['flow']
+    return pd.DataFrame(charge_discharge_dict)
+
+def get_charge_discharge_prices(charge_discharge, es):
+    market_clearing_price = get_market_clearing_price(es).rename('mc_price')
+    charging_discharging = charge_discharge > 0
+    charging_discharging = charge_discharge.apply(lambda x: x * market_clearing_price)
+    return charging_discharging.mean().mean(level=1)
 
 def get_cycles(es):
     results = es.results['Main']
@@ -466,9 +488,9 @@ def get_excess(es):
     excess = excess.sum(level=[0,1,2])
     return excess
 
-def get_formatted_results(costs, installed_capacity, yearly_generation, cycles,
-                          emissions, average_yearly_price, startups, demand, excess,
-                          shortage):
+def get_formatted_results(var_costs, installed_capacity, yearly_generation, cycles,
+                          charge_discharge_prices, emissions, average_yearly_price,
+                          startups, demand, excess, shortage):
     r"""
     Gives back results in the standard output format as agreed upon with all
     model experiment participants.
@@ -499,24 +521,24 @@ def postprocess(es_filename, results_path):
     sc = Scenario()
     sc.restore_es(filename=es_filename)
     es = sc.es
-
     demand = get_demand(es)
     yearly_generation = get_yearly_generation(es)
     shortage = get_shortage(yearly_generation)
     startups = get_start_ups(es)
     emissions = get_emissions(es)
     var_costs = get_var_costs(es)
+    costs = pd.Series()
     average_yearly_price = get_average_yearly_price(es)
     installed_capacity = get_installed_capacity(es)
-    cap_costs = get_cap_costs(es)
-    # lcoe = get_lcoe(es)
-    costs = pd.DataFrame()
     cycles = get_cycles(es)
+    storage_charge_discharge = get_storage_charge_discharge(es)
+    charge_discharge_prices = get_charge_discharge_prices(storage_charge_discharge, es)
     excess = get_excess(es)
-    formatted_results = get_formatted_results(costs,
+    formatted_results = get_formatted_results(var_costs,
                                               installed_capacity,
                                               yearly_generation,
                                               cycles,
+                                              charge_discharge_prices,
                                               emissions,
                                               average_yearly_price,
                                               startups,
@@ -537,7 +559,7 @@ def postprocess(es_filename, results_path):
     var_costs.to_csv(results_path + '/' + 'var_costs.csv')
     pd.Series(average_yearly_price).to_csv(results_path + '/' + 'average_yearly_price.csv')
     installed_capacity.to_csv(results_path + '/' + 'installed_capacity.csv', header=True)
-    # cap_costs.to_csv('postproc_results/cap_costs.csv')
+    charge_discharge_prices.to_csv(results_path + '/' + 'charge_discharge_prices.csv')
     costs.to_csv(results_path + '/' + 'costs.csv')
     cycles.to_csv(results_path + '/' + 'cycles.csv')
     excess.to_csv(results_path + '/' + 'excess.csv')
