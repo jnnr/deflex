@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from deflex import Scenario
 import re
+from cydets.algorithm import detect_cycles
 
 def get_var_costs(es):
     """
@@ -54,8 +55,8 @@ def get_installed_capacity(es):
     installed_line = (i for i in p.keys()
                       if (i[0].label.cat == 'line')
                       & (i[1] is not None))
-    installed_phes = (i for i in p.keys()
-                      if (i[0].label.subtag == 'phes'))
+    installed_storages = (i for i in p.keys()
+                          if (i[0].label.cat=='storage'))
     installed_capacity = dict()
 
     for i in installed_chp:
@@ -82,7 +83,7 @@ def get_installed_capacity(es):
         installed_capacity['electricity', i[0].label.tag, i[0].label.subtag, i[0].label.region, 'nominal_value'] = \
             p[i]['scalars']['nominal_value']
 
-    for i in installed_phes:
+    for i in installed_storages:
         if i[1] == None:
             installed_capacity['electricity', 'storage', i[0].label.subtag, i[0].label.region,  'nominal_capacity'] = \
                 p[i]['scalars']['nominal_capacity']
@@ -103,6 +104,13 @@ def get_installed_capacity(es):
             r[i]['sequences']['flow'].max()
 
     installed_capacity = pd.Series(installed_capacity)
+
+    installed_capacity['electricity', 'ee', 'wind_onshore', 'DE01', 'nominal_value'] = \
+        installed_capacity['electricity', 'ee', 'wind', 'DE01', 'nominal_value']
+    installed_capacity['electricity', 'ee', 'wind_offshore', 'DE02', 'nominal_value'] = \
+        installed_capacity['electricity', 'ee', 'wind', 'DE02', 'nominal_value']
+    installed_capacity.drop([('electricity','ee','wind','DE01', 'nominal_value')])
+
     installed_capacity = installed_capacity.sort_index()
     installed_capacity = installed_capacity.sum(level=[0,1,2,4])
 
@@ -112,6 +120,7 @@ def get_installed_capacity(es):
     sum_tech = pd.concat([sum_tech], keys=['all'], names=['technology'])
     sum_tech = sum_tech.reorder_levels(['sector', 'technology', 'carrier', 'variable'])
     installed_capacity = installed_capacity.append(sum_tech)
+    installed_capacity *= 1e-3
     return installed_capacity
 
 def get_cap_costs(es):
@@ -309,7 +318,7 @@ def get_generation(es):
                 generation_dict['electricity', i[0].label.cat, 'None', i[1].label.region] = \
                     r[i]['sequences']['flow']
             elif (i[0].label.cat == 'storage'):
-                generation_dict['electricity', i[0].label.cat, 'None', i[1].label.region] = \
+                generation_dict['electricity', i[0].label.cat, i[0].label.subtag, i[1].label.region] = \
                     r[i]['sequences']['flow']
             elif (i[0].label.cat == 'line'):
                 # lines
@@ -327,6 +336,9 @@ def get_generation(es):
 def get_yearly_generation(es):
     generation_df = get_generation(es)
     # spatial sum
+    generation_df['electricity', 'ee', 'wind_onshore', 'DE01'] = generation_df['electricity', 'ee', 'wind', 'DE01']
+    generation_df['electricity', 'ee', 'wind_offshore', 'DE02'] = generation_df['electricity', 'ee', 'wind', 'DE02']
+    generation_df = generation_df.drop([['electricity', 'ee', 'wind', 'DE01'],['electricity','ee','wind','DE02']], axis=1)
     generation_df = generation_df.sum(axis=1, level=[0, 1, 2])
     generation_df = generation_df.sort_index(axis=1, level=[0, 1, 2])
     # temporal sum
@@ -340,6 +352,7 @@ def get_yearly_generation(es):
     sum_tech = pd.concat([sum_tech], keys=['all'], names=['technology'])
     sum_tech = sum_tech.reorder_levels(['sector', 'technology', 'carrier'])
     generation_df = generation_df.append(sum_tech)
+    generation_df *= 1e-3
     return generation_df
 
 
@@ -393,6 +406,8 @@ def get_start_ups(es):
     startups = startups.sum(axis=0)
     startups = startups.sort_index(level=[0, 1, 2])
     startups = startups.sum(level=[0, 1, 2])
+    startups[('electricity', 'sum', 'None')] = startups['electricity'].sum()
+
     return startups
 
 
@@ -417,17 +432,43 @@ def get_demand(es):
                     r[i]['sequences']['flow']
 
     demand_df = pd.DataFrame(demand_dict)
-
     demand_df['electricity', 'total'] = demand_df['electricity'].sum(axis=1)
     demand_df['heat', 'total'] = demand_df['heat'].sum(axis=1)
     demand_total = demand_df[[('electricity', 'total'), ('heat', 'total')]]
-    demand_sum = demand_total.sum() * 1e-3
-    demand_max = demand_total.max() * 1e-6
-    demand = pd.concat([demand_sum, demand_max], axis=1, keys=['sum [MWh]', 'max [MW]'])
+    demand_sum = pd.concat([demand_total.sum() * 1e-6], keys=['sum'])
+    demand_max = pd.concat([demand_total.max() * 1e-3], keys=['max'])
+    demand = pd.concat([demand_sum, demand_max], axis=0).reorder_levels([1,2,0])
     return demand
 
 
-def get_formatted_results(costs, installed_capacity, yearly_generation, cycles, emissions, average_yearly_price, startups, demand):
+def get_cycles(es):
+    results = es.results['Main']
+    cycles_dict = {}
+    gen = (i for i in results.keys() if i[0].label.cat=='storage' and i[1]==None)
+    for i in gen:
+        state_of_charge_el = results[i]['sequences']['capacity']
+        n_cycles = len(detect_cycles(state_of_charge_el))
+        cycles_dict[i[0].label.tag, i[0].label.cat, i[0].label.subtag, i[0].label.region] = n_cycles
+    cycles = pd.Series(cycles_dict)
+    cycles = cycles.sum(level=[0,1,2])
+    return cycles
+
+def get_excess(es):
+    results = es.results['Main']
+    excess_dict = {}
+    gen = (i for i in results.keys()
+           if i[1] is not None
+           and i[1].label.cat=='excess')
+    for i in gen:
+        excess_dict[i[1].label.tag, i[1].label.cat, i[1].label.subtag, i[1].label.region] = \
+            results[i]['sequences']['flow'].sum()
+    excess = pd.Series(excess_dict)
+    excess = excess.sum(level=[0,1,2])
+    return excess
+
+def get_formatted_results(costs, installed_capacity, yearly_generation, cycles,
+                          emissions, average_yearly_price, startups, demand, excess,
+                          shortage):
     r"""
     Gives back results in the standard output format as agreed upon with all
     model experiment participants.
@@ -447,9 +488,10 @@ def get_formatted_results(costs, installed_capacity, yearly_generation, cycles, 
         from_table = locals()[row['from_table']]
         key = tuple(row[['key_0', 'key_1', 'key_2', 'key_3']].dropna())
         if key:
-            print(key)
-            print(from_table[key])
-            formatted_results.loc[formatted_results['Variable'] == to_variable, 'Value'] = from_table[key]
+            # print(type(from_table))
+            # print(key)
+            # print(from_table.loc[key])
+            formatted_results.loc[formatted_results['Variable'] == to_variable, 'Value'] = from_table.loc[key]
     return formatted_results
 
 
@@ -469,7 +511,8 @@ def postprocess(es_filename, results_path):
     cap_costs = get_cap_costs(es)
     # lcoe = get_lcoe(es)
     costs = pd.DataFrame()
-    cycles = pd.DataFrame()
+    cycles = get_cycles(es)
+    excess = get_excess(es)
     formatted_results = get_formatted_results(costs,
                                               installed_capacity,
                                               yearly_generation,
@@ -477,7 +520,9 @@ def postprocess(es_filename, results_path):
                                               emissions,
                                               average_yearly_price,
                                               startups,
-                                              demand)
+                                              demand,
+                                              excess,
+                                              shortage)
     # print(formatted_results[['Variable', 'Unit', 'Value']])
 
     # save
@@ -495,13 +540,14 @@ def postprocess(es_filename, results_path):
     # cap_costs.to_csv('postproc_results/cap_costs.csv')
     costs.to_csv(results_path + '/' + 'costs.csv')
     cycles.to_csv(results_path + '/' + 'cycles.csv')
+    excess.to_csv(results_path + '/' + 'excess.csv')
     formatted_results.to_csv(results_path + '/' + 'formatted_results.csv')
 
     print('Results saved to ', results_path)
 
 if __name__=='__main__':
     dpath = '/home/jann/reegis/scenarios/deflex/2012/results_cbc/'
-    filename = 'deflex_2012_de02.esys'  # 'deflex_2012_de21.esys'
+    filename = 'deflex_2012_de02_full_100.esys'  # 'deflex_2012_de21.esys'
     es_filename = dpath + filename
     results_path = f'/home/jann/reegis/scenarios/deflex/2012/postproc_results_{re.split(".esys", filename)[0]}/'
     postprocess(es_filename, results_path)

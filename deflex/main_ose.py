@@ -87,17 +87,18 @@ def main(year, tag, plot_graph=False):
     logging.info("Postprocess results")
     results_path = os.path.join(path, f'postproc_results_{name}')
     postprocess(es_filename=out_file, results_path=results_path)
+    print(out_file, results_path)
 
 
 if __name__ == "__main__":
     logger.define_logging()
     for y in [2012]:
-        for tags in ['full_100',
-                     'full_50',
-                     'full_25',
-                     'electricity-only_100',
-                     'electricity-only_50',
-                     'electricity-only_25']:
+        for tags in ['full_100']: #,
+                     # 'full_50',
+                     # 'full_25',
+                     # 'electricity-only_100',
+                     # 'electricity-only_50',
+                     # 'electricity-only_25']:
             for my_rmap in ['de02']:
                 cfg.tmp_set('init', 'map', my_rmap)
                 try:
