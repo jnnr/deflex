@@ -336,6 +336,7 @@ def get_generation(es):
 
 def get_yearly_generation(es):
     generation_df = get_generation(es)
+
     # spatial sum
     generation_df['electricity', 'ee', 'wind_onshore', 'DE01'] = generation_df['electricity', 'ee', 'wind', 'DE01']
     generation_df['electricity', 'ee', 'wind_offshore', 'DE02'] = generation_df['electricity', 'ee', 'wind', 'DE02']
@@ -353,7 +354,7 @@ def get_yearly_generation(es):
     sum_tech = pd.concat([sum_tech], keys=['all'], names=['technology'])
     sum_tech = sum_tech.reorder_levels(['sector', 'technology', 'carrier'])
     generation_df = generation_df.append(sum_tech)
-    generation_df *= 1e-3
+    generation_df *= 1e-6
     return generation_df
 
 
@@ -383,12 +384,12 @@ def get_emissions(es):
             emission_df.loc[i[0].label.subtag, 'summed_flow [MWh]'] = (
                 r[i]['sequences']['flow'].sum())
 
-    emission_df['summed_emission [kgCO2]'] = (emission_df['specific_emission [kgCO2/MWh]'] *
+    emission_df['summed_emission [Mio t CO2]'] = 1e-9 * (emission_df['specific_emission [kgCO2/MWh]'] *
                                      emission_df['summed_flow [MWh]'])
 
-    emission_df.loc['total'] = [None, None, emission_df['summed_emission [kgCO2]'].sum()]
+    emission_df.loc['total'] = [None, None, emission_df['summed_emission [Mio t CO2]'].sum()]
     emission_df.sort_index(inplace=True)
-    return emission_df['summed_emission [kgCO2]']
+    return emission_df['summed_emission [Mio t CO2]']
 
 
 def get_start_ups(es):
@@ -460,8 +461,11 @@ def get_storage_charge_discharge(es):
 def get_charge_discharge_prices(charge_discharge, es):
     market_clearing_price = get_market_clearing_price(es).rename('mc_price')
     charging_discharging = charge_discharge > 0
-    charging_discharging = charge_discharge.apply(lambda x: x * market_clearing_price)
-    return charging_discharging.mean().mean(level=1)
+    charging_discharging_price = {}
+    for column in charging_discharging.columns:
+        charging_discharging_price[column] = market_clearing_price[charging_discharging[column]].mean()
+    charging_discharging_price = pd.Series(charging_discharging_price).mean(level=[0,1,2])
+    return charging_discharging_price
 
 def get_cycles(es):
     results = es.results['Main']
@@ -485,11 +489,50 @@ def get_excess(es):
         excess_dict[i[1].label.tag, i[1].label.cat, i[1].label.subtag, i[1].label.region] = \
             results[i]['sequences']['flow'].sum()
     excess = pd.Series(excess_dict)
-    excess = excess.sum(level=[0,1,2])
+    excess = excess.sum(level=[0,1,2]) * 1e-6
     return excess
 
-def get_formatted_results(var_costs, installed_capacity, yearly_generation, cycles,
-                          charge_discharge_prices, emissions, average_yearly_price,
+def get_curtailment(es):
+    r = es.results['Main']
+    curtailment_dict = {}
+    gen = (i for i in r.keys() if i[1] is not None
+           and i[1].label.cat == 'sink'
+           and i[1].label.tag == 'curtailment')
+    for i in gen:
+        curtailment_dict['electricity', 'ee', i[0].label.subtag, i[0].label.region] = \
+            r[i]['sequences']['flow']
+    curtailment_df = pd.DataFrame(curtailment_dict)
+    curtailment_df['electricity', 'ee', 'wind_onshore', 'DE01'] = curtailment_df['electricity', 'ee', 'wind', 'DE01']
+    curtailment_df['electricity', 'ee', 'wind_offshore', 'DE02'] = curtailment_df['electricity', 'ee', 'wind', 'DE02']
+    curtailment_df = curtailment_df.drop(
+        [['electricity', 'ee', 'wind', 'DE01'], ['electricity', 'ee', 'wind', 'DE02']], axis=1)
+
+    curtailment_df = curtailment_df.sum().sum(level=[0, 1, 2])
+    curtailment_df.loc[('electricity', 'ee', 'all')] = curtailment_df.sum()
+    curtailment_df *= 1e-6
+    return curtailment_df
+
+def get_curtailment_relative(curtailment, yearly_generation):
+    possible_feedin = yearly_generation.loc[curtailment.index]
+    possible_feedin.loc[('electricity', 'ee', 'all')] = possible_feedin.sum()
+    curtailment_relative = curtailment/possible_feedin *100  # %
+    return curtailment_relative
+
+def get_renewable_share(demand, yearly_generation):
+    renewable_generation = yearly_generation.loc[('electricity', 'ee', slice(None))].sum()
+    renewable_generation += yearly_generation.loc[('electricity', 'all', 'bioenergy')]
+    total_demand = demand.loc['electricity', 'total', 'sum']
+    renewable_share = renewable_generation / total_demand
+    return pd.Series({('electricity', 'ee', 'renewables_share'): renewable_share})
+
+def get_full_load_hours(es):
+    capacity = get_installed_capacity(es)
+    yearly_generation = get_yearly_generation(es)
+    full_load_hours = 0  # yearly_generation * 1/capacity
+    return full_load_hours
+
+def get_formatted_results(scenario_name, var_costs, installed_capacity, yearly_generation, curtailment,
+                          curtailment_relative, renewable_share, cycles, charge_discharge_prices, emissions, average_yearly_price,
                           startups, demand, excess, shortage):
     r"""
     Gives back results in the standard output format as agreed upon with all
@@ -502,7 +545,7 @@ def get_formatted_results(var_costs, installed_capacity, yearly_generation, cycl
     abs_path = os.path.dirname(os.path.abspath(__file__))
     formatted_results = pd.read_csv(os.path.join(abs_path, 'ose_output_template_deflex.csv'))
     formatted_results['Model'] = 'deflex'
-    formatted_results['Scenario'] = 'deflex'
+    formatted_results['Scenario'] = scenario_name
 
     mapping = pd.read_csv(os.path.join(abs_path, 'mapping_results_to_output_template.csv'))
     for index, row in mapping.iterrows():
@@ -510,7 +553,7 @@ def get_formatted_results(var_costs, installed_capacity, yearly_generation, cycl
         from_table = locals()[row['from_table']]
         key = tuple(row[['key_0', 'key_1', 'key_2', 'key_3']].dropna())
         if key:
-            # print(type(from_table))
+            # print(from_table)
             # print(key)
             # print(from_table.loc[key])
             formatted_results.loc[formatted_results['Variable'] == to_variable, 'Value'] = from_table.loc[key]
@@ -520,6 +563,7 @@ def get_formatted_results(var_costs, installed_capacity, yearly_generation, cycl
 def postprocess(es_filename, results_path):
     sc = Scenario()
     sc.restore_es(filename=es_filename)
+    scenario_name = es_filename.split("deflex_")[-1].split(".esys")[0]
     es = sc.es
     demand = get_demand(es)
     yearly_generation = get_yearly_generation(es)
@@ -534,9 +578,17 @@ def postprocess(es_filename, results_path):
     storage_charge_discharge = get_storage_charge_discharge(es)
     charge_discharge_prices = get_charge_discharge_prices(storage_charge_discharge, es)
     excess = get_excess(es)
-    formatted_results = get_formatted_results(var_costs,
+    curtailment = get_curtailment(es)
+    curtailment_relative = get_curtailment_relative(curtailment, yearly_generation)
+    renewable_share = get_renewable_share(demand, yearly_generation)
+    get_full_load_hours(es)
+    formatted_results = get_formatted_results(scenario_name,
+                                              var_costs,
                                               installed_capacity,
                                               yearly_generation,
+                                              curtailment,
+                                              curtailment_relative,
+                                              renewable_share,
                                               cycles,
                                               charge_discharge_prices,
                                               emissions,
@@ -553,6 +605,8 @@ def postprocess(es_filename, results_path):
 
     demand.to_csv(results_path + '/' + 'demand.csv')
     yearly_generation.to_csv(results_path + '/' + 'yearly_generation.csv', header=True)
+    curtailment.to_csv(results_path + '/' + 'curtailment.csv')
+    renewable_share.to_csv(results_path + '/' + 're_share.csv')
     shortage.to_csv(results_path + '/' + 'shortage.csv')
     startups.to_csv(results_path + '/' + 'startups.csv')
     emissions.to_csv(results_path + '/' + 'emissions.csv')
