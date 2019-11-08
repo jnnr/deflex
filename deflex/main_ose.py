@@ -93,12 +93,14 @@ def main(year, tag, plot_graph=False):
 if __name__ == "__main__":
     logger.define_logging()
     for y in [2012]:
-        for tags in ['full_100']: #,
-                     # 'full_50',
-                     # 'full_25',
-                     # 'electricity-only_100',
-                     # 'electricity-only_50',
-                     # 'electricity-only_25']:
+        for tags in [
+                     'full_100',
+                     'full_50',
+                     'full_25',
+                     'electricity-only_100',
+                     'electricity-only_50',
+                     'electricity-only_25'
+                     ]:
             for my_rmap in ['de02']:
                 cfg.tmp_set('init', 'map', my_rmap)
                 try:
