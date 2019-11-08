@@ -43,6 +43,42 @@ class Scenario(reegis.scenario_tools.Scenario):
                                             self.extra_regions)
         return nodes
 
+    def add_re_share_constraint(self):
+        import pyomo.environ as po
+        res_limit = 0.65
+        re_flows = {}
+        demands_el = {}
+
+        for (i, o) in self.model.flows:
+            if o.label.cat=='demand' and o.label.tag=='electricity':
+                demands_el[(i, o)] = self.model.flows[i, o]
+                print('demand', i,o)
+            if i.label.cat=='transformer' and i.label.tag=='ee':
+                print('\n\n')
+                print('asfd', i, o)
+                print('\n\n')
+                re_flows[(i, o)] = self.model.flows[i, o]
+            if i.label.cat=='trsf' and i.label.subtag=='bioenergy':
+                print('\n\n')
+                print('asfd', i, o)
+                print('\n\n')
+                re_flows[(i, o)] = self.model.flows[i, o]
+        for flow in re_flows.keys():
+            print(flow)
+
+        # demands_el
+
+        self.model.renewable_share = po.Expression(
+            expr=sum(self.model.flow[inflow, outflow, t] * self.model.timeincrement[t]
+                     for (inflow, outflow) in re_flows
+                     for t in self.model.TIMESTEPS) \
+                 / sum(self.model.flow[inflow, outflow, t] * self.model.timeincrement[t]
+                            for (inflow, outflow) in demands_el
+                            for t in self.model.TIMESTEPS))
+
+        self.model.minimal_renewable_share = po.Constraint(expr=self.model.renewable_share >= res_limit)
+        return self
+
 
 def create_fuel_bus_with_source(nodes, fuel, region, data):
     bus_label = Label('bus', 'commodity', fuel.replace(' ', '_'), region)
@@ -52,9 +88,11 @@ def create_fuel_bus_with_source(nodes, fuel, region, data):
     cs_label = Label('source', 'commodity', fuel.replace(' ', '_'), region)
 
     if cs_label not in nodes:
+        co2_costs = data.loc['emission', fuel.replace('_', ' ')]\
+                    * data.loc['costs', 'co2'] * 1e-3
         nodes[cs_label] = solph.Source(
             label=cs_label, outputs={nodes[bus_label]: solph.Flow(
-                variable_costs=data.loc['costs', fuel.replace('_', ' ')],
+                variable_costs=data.loc['costs', fuel.replace('_', ' ')] + co2_costs,
                 emission=data.loc['emission', fuel.replace('_', ' ')])})
     return nodes
 
@@ -69,7 +107,8 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
     # Global commodity sources
     cs = table_collection['commodity_source']['DE']
     for fuel in cs.columns:
-        nodes = create_fuel_bus_with_source(nodes, fuel, 'DE', cs)
+        if fuel!='co2':
+            nodes = create_fuel_bus_with_source(nodes, fuel, 'DE', cs)
 
     # Local volatile sources
     vs = table_collection['volatile_source']
@@ -90,11 +129,21 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
             if bus_label not in nodes:
                 nodes[bus_label] = solph.Bus(label=bus_label)
             if capacity * sum(feedin) > 0:
+                bus_curtailment_label = Label('bus', 'curtailment', vs_type, region)
+                sink_curtailment_label = Label('sink', 'curtailment', vs_type, region)
+                nodes[bus_curtailment_label] = solph.Bus(label=bus_curtailment_label)
+                nodes[sink_curtailment_label] = solph.Sink(label=sink_curtailment_label,
+                                                           inputs={nodes[bus_curtailment_label]: solph.Flow()})
                 nodes[vs_label] = solph.Source(
                     label=vs_label,
-                    outputs={nodes[bus_label]: solph.Flow(
+                    outputs={nodes[bus_curtailment_label]: solph.Flow(
                         actual_value=feedin, nominal_value=capacity,
                         fixed=True, emission=0)})
+                feedin_label = Label('transformer', 'ee', vs_type, region)
+                nodes[feedin_label] = solph.Transformer(label=feedin_label,
+                                                        inputs={nodes[bus_curtailment_label]: solph.Flow()},
+                                                        outputs={nodes[bus_label]: solph.Flow()},
+                                                        conversion_factors={nodes[bus_label]: 1})
 
     # Decentralised heating systems
     dh = table_collection['decentralised_heating']
@@ -110,39 +159,40 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
 
         fuels = [f for f in dh[data_name].columns if f in ts[d_region]]
         for fuel in fuels:
-            src = dh.loc['source', (data_name, fuel)]
-            bus_label = Label('bus', 'commodity', src.replace(' ', '_'),
-                              region_name)
+            if fuel!='co2':
+                src = dh.loc['source', (data_name, fuel)]
+                bus_label = Label('bus', 'commodity', src.replace(' ', '_'),
+                                  region_name)
 
-            # Check if source bus exists
-            if bus_label not in nodes:
-                create_fuel_bus_with_source(nodes, src, region_name, cs)
+                # Check if source bus exists
+                if bus_label not in nodes:
+                    create_fuel_bus_with_source(nodes, src, region_name, cs)
 
-            # Create heating bus as Bus
-            heat_bus_label = Label('bus', 'heat', fuel.replace(' ', '_'),
+                # Create heating bus as Bus
+                heat_bus_label = Label('bus', 'heat', fuel.replace(' ', '_'),
+                                       region_name)
+                nodes[heat_bus_label] = solph.Bus(label=heat_bus_label)
+
+                # Create heating system as Transformer
+                trsf_label = Label('trsf', 'heat', fuel.replace(' ', '_'),
                                    region_name)
-            nodes[heat_bus_label] = solph.Bus(label=heat_bus_label)
 
-            # Create heating system as Transformer
-            trsf_label = Label('trsf', 'heat', fuel.replace(' ', '_'),
-                               region_name)
+                efficiency = float(dh.loc['efficiency', (data_name, fuel)])
 
-            efficiency = float(dh.loc['efficiency', (data_name, fuel)])
+                nodes[trsf_label] = solph.Transformer(
+                    label=trsf_label,
+                    inputs={nodes[bus_label]: solph.Flow()},
+                    outputs={nodes[heat_bus_label]: solph.Flow()},
+                    conversion_factors={nodes[heat_bus_label]: efficiency})
 
-            nodes[trsf_label] = solph.Transformer(
-                label=trsf_label,
-                inputs={nodes[bus_label]: solph.Flow()},
-                outputs={nodes[heat_bus_label]: solph.Flow()},
-                conversion_factors={nodes[heat_bus_label]: efficiency})
-
-            # Create demand as Sink
-            d_heat_demand_label = Label('demand', 'heat',
-                                        fuel.replace(' ', '_'), region_name)
-            nodes[d_heat_demand_label] = solph.Sink(
-                    label=d_heat_demand_label,
-                    inputs={nodes[heat_bus_label]: solph.Flow(
-                        actual_value=ts[d_region, fuel],
-                        nominal_value=1, fixed=True)})
+                # Create demand as Sink
+                d_heat_demand_label = Label('demand', 'heat',
+                                            fuel.replace(' ', '_'), region_name)
+                nodes[d_heat_demand_label] = solph.Sink(
+                        label=d_heat_demand_label,
+                        inputs={nodes[heat_bus_label]: solph.Flow(
+                            actual_value=ts[d_region, fuel],
+                            nominal_value=1, fixed=True)})
 
     # Local electricity demand
     ts.columns = ts.columns.swaplevel()
@@ -170,6 +220,16 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
                 inputs={nodes[bus_label]: solph.Flow(
                     actual_value=ts['district heating', region],
                     nominal_value=1, fixed=True)})
+        if ts['district heating'][region].sum() == 0:
+            bus_label = Label('bus', 'heat', 'district', region)
+            if bus_label not in nodes:
+                nodes[bus_label] = solph.Bus(label=bus_label)
+            heat_demand_label = Label('demand', 'heat', 'district', region)
+            nodes[heat_demand_label] = solph.Sink(
+                label=heat_demand_label,
+                inputs={nodes[bus_label]: solph.Flow(
+                    actual_value=ts['district heating', region],
+                    nominal_value=1, fixed=False)})
 
     # Connect electricity buses with transmission
     power_lines = table_collection['transmission']['electrical']
@@ -285,7 +345,7 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
         nodes = storage_nodes(table_collection, nodes)
 
     # Add shortage excess to every bus
-    bus_keys = [key for key in nodes.keys() if 'bus' in key.cat]
+    bus_keys = [key for key in nodes.keys() if 'bus' in key.cat and not key[1]=='curtailment']
     for key in bus_keys:
         excess_label = Label('excess', key.tag, key.subtag, key.region)
         nodes[excess_label] = solph.Sink(
