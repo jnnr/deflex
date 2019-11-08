@@ -25,7 +25,7 @@ from oemof.tools import logger
 import reegis.config as cfg
 import deflex
 from deflex.postprocess_results_for_ose import postprocess
-
+from deflex.join_results import join_results
 
 def stopwatch():
     if not hasattr(stopwatch, 'start'):
@@ -90,7 +90,6 @@ def main(year, tag, plot_graph=False):
     logging.info("Postprocess results")
     results_path = os.path.join(path, f'postproc_results_{name}')
     postprocess(es_filename=out_file, results_path=results_path)
-    print(out_file, results_path)
 
 
 if __name__ == "__main__":
@@ -113,3 +112,7 @@ if __name__ == "__main__":
                     time.sleep(0.5)
                     logging.error(e)
                     time.sleep(0.5)
+
+        path = os.path.join(cfg.get('paths', 'scenario'), 'deflex', str(y))
+        join_results(path)
+
