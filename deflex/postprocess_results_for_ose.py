@@ -410,6 +410,11 @@ def get_start_ups(es):
     startups = startups.sort_index(level=[0, 1, 2])
     startups = startups.sum(level=[0, 1, 2])
     startups[('electricity', 'sum', 'None')] = startups['electricity'].sum()
+    startups.index = startups.index.set_names(['sector', 'technology', 'carrier'])
+    sum_tech = startups.groupby(['sector', 'carrier']).sum()
+    sum_tech = pd.concat([sum_tech], keys=['all'], names=['technology'])
+    sum_tech = sum_tech.reorder_levels(['sector', 'technology', 'carrier'])
+    startups = startups.append(sum_tech)
 
     return startups
 
