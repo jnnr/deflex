@@ -69,6 +69,9 @@ def main(year, tag, plot_graph=False):
     logging.info("Create the concrete model: {0}".format(stopwatch()))
     sc.create_model()
 
+    logging.info("Add re share constraint {0}".format(stopwatch()))
+    sc.add_re_share_constraint()
+
     logging.info("Solve the optimisation model: {0}".format(stopwatch()))
     sc.solve()
 
