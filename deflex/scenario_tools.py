@@ -350,7 +350,7 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
         excess_label = Label('excess', key.tag, key.subtag, key.region)
         nodes[excess_label] = solph.Sink(
             label=excess_label,
-            inputs={nodes[key]: solph.Flow()})
+            inputs={nodes[key]: solph.Flow(variable_costs=0.003)})
         shortage_label = Label('shortage', key.tag, key.subtag, key.region)
         nodes[shortage_label] = solph.Source(
             label=shortage_label,
