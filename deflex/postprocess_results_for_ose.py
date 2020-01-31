@@ -477,9 +477,13 @@ def get_cycles(es):
     cycles_dict = {}
     gen = (i for i in results.keys() if i[0].label.cat=='storage' and i[1]==None)
     for i in gen:
-        state_of_charge_el = results[i]['sequences']['capacity']
-        n_cycles = len(detect_cycles(state_of_charge_el))
-        cycles_dict[i[0].label.tag, i[0].label.cat, i[0].label.subtag, i[0].label.region] = n_cycles
+        try:
+            state_of_charge_el = results[i]['sequences']['capacity']
+            n_cycles = len(detect_cycles(state_of_charge_el))
+            cycles_dict[i[0].label.tag, i[0].label.cat, i[0].label.subtag, i[0].label.region] = n_cycles
+        except:
+            cycles_dict[i[0].label.tag, i[0].label.cat, i[0].label.subtag, i[0].label.region] = 0
+
     cycles = pd.Series(cycles_dict)
     cycles = cycles.sum(level=[0,1,2])
     return cycles
