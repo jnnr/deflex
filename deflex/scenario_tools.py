@@ -255,7 +255,8 @@ def nodes_from_table_collection(table_collection, extra_regions=None):
                     label=line_label,
                     inputs={nodes[bus_label_in]: solph.Flow()},
                     outputs={nodes[bus_label_out]: solph.Flow(
-                        nominal_value=values.capacity)},
+                        nominal_value=values.capacity,
+                        variable_costs=0.001)},
                     conversion_factors={
                         nodes[bus_label_out]: values.efficiency})
             else:
